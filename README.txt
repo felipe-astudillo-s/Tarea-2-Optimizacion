@@ -2,6 +2,11 @@
   TAREA 2 - METAHEURÍSTICAS: ALGORITMO GENÉTICO PARA MCDP
 ================================================================
 
+INTEGRANTES
+-----------
+  - Felipe Astudillo    RUT: 21.734.001-2
+  - Diego Zuñiga        RUT: XX.XXX.XXX-X
+
 DESCRIPCIÓN
 -----------
 Implementación de un Algoritmo Genético (AG) para resolver el
@@ -29,9 +34,9 @@ ARCHIVOS
 
   Instancias/
     instanciasMCDP.txt   Tres instancias del problema:
-                           - Instancia 1 (pequeña):  5 partes × 7 máquinas
-                           - Instancia 2 (Boctor 1): 16 partes × 30 máquinas
-                           - Instancia 3 (Boctor 10): 16 partes × 30 máquinas
+                           - Instancia 1 (pequeña):  5 máquinas × 7 partes
+                           - Instancia 2 (Boctor 1): 16 máquinas × 30 partes
+                           - Instancia 3 (Boctor 10): 16 máquinas × 30 partes
 
 REQUISITOS
 ----------
