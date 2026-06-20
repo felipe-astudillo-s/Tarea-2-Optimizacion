@@ -1,14 +1,14 @@
 """
 mcdp_ga.py
-Genetic Algorithm for the Manufacturing Cell Design Problem (MCDP).
+Algoritmo Genético para el Problema de Diseño de Celdas de Manufactura (MCDP).
 
-Objective: maximize Grouping Efficacy (GE)
+Objetivo: maximizar la Eficacia de Agrupamiento (GE)
     GE = e_in / (e_in + e_out + e_voids)
        = e_in / (total_ones + e_voids)
 
-Solution representation: vector of length M (machines) where each element
-is the cell index assigned to that machine (0 to C-1). Parts are assigned
-greedily after the machine assignment is fixed.
+Representación de solución: vector de longitud M (máquinas) donde cada elemento
+es el índice de celda asignado a esa máquina (0 a C-1). Las partes se asignan
+de forma greedy después de fijar la asignación de máquinas.
 """
 
 import time
@@ -18,15 +18,15 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# Instance
+# Instancia
 # ---------------------------------------------------------------------------
 
 class MCDPInstance:
-    """Stores a parsed MCDP instance."""
+    """Almacena una instancia MCDP parseada."""
 
     def __init__(self, matrix: np.ndarray, C: int, max_m: int):
         self.matrix = matrix.astype(int)
-        # Standard MCDP incidence matrix: rows = machines, columns = parts
+        # Matriz de incidencia estándar MCDP: filas = máquinas, columnas = partes
         self.n_machines, self.n_parts = matrix.shape
         self.C = C
         self.max_m = max_m
@@ -34,7 +34,7 @@ class MCDPInstance:
 
     @classmethod
     def from_block(cls, text: str) -> "MCDPInstance":
-        """Parse a text block: matrix rows (CSV) + final line 'C,MaxM'."""
+        """Parsea un bloque de texto: filas de la matriz (CSV) + última línea 'C,MaxM'."""
         lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
         C, max_m = [int(x) for x in lines[-1].split(",")]
         rows = [[int(x) for x in ln.split(",")] for ln in lines[:-1]]
@@ -48,10 +48,10 @@ class MCDPInstance:
 
 
 def parse_instance_file(filepath: str) -> list:
-    """Read the instance file and return a list of MCDPInstance objects.
+    """Lee el archivo de instancias y retorna una lista de objetos MCDPInstance.
 
-    Instances are separated by blank lines. Lines that do not start with a
-    digit or comma are treated as comments and ignored.
+    Las instancias están separadas por líneas en blanco. Las líneas que no comienzan
+    con un dígito o coma se tratan como comentarios y se ignoran.
     """
     with open(filepath, "r") as f:
         content = f.read()
@@ -68,11 +68,11 @@ def parse_instance_file(filepath: str) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Individual
+# Individuo
 # ---------------------------------------------------------------------------
 
 class Individual:
-    """Candidate solution: machine-to-cell assignment vector."""
+    """Solución candidata: vector de asignación de máquinas a celdas."""
 
     def __init__(self, machine_assignment: np.ndarray):
         self.machine_assignment: np.ndarray = machine_assignment.copy()
@@ -92,32 +92,32 @@ class Individual:
 
 
 # ---------------------------------------------------------------------------
-# Genetic Algorithm
+# Algoritmo Genético
 # ---------------------------------------------------------------------------
 
 class GeneticAlgorithm:
-    """Genetic Algorithm for MCDP.
+    """Algoritmo Genético para MCDP.
 
-    Parameters
+    Parámetros
     ----------
     pop_size : int
-        Population size.
+        Tamaño de la población.
     max_generations : int
-        Maximum number of generations (stop if reached first).
+        Número máximo de generaciones (se detiene al alcanzarse primero).
     max_time_seconds : float
-        Maximum execution wall-clock time in seconds (stop if reached first).
+        Tiempo máximo de ejecución en segundos (se detiene al alcanzarse primero).
     tournament_size : int
-        Number of individuals per tournament in selection.
+        Número de individuos por torneo en la selección.
     crossover_prob : float
-        Probability of applying crossover to a pair of parents.
+        Probabilidad de aplicar cruce a un par de padres.
     mutation_prob : float
-        Probability of applying mutation to an offspring.
+        Probabilidad de aplicar mutación a un descendiente.
     elite_count : int
-        Number of best individuals copied unchanged to the next generation.
+        Número de mejores individuos copiados sin cambios a la siguiente generación.
     crossover_type : str
-        "two_point" or "one_point".
-    random_seed : int or None
-        Seed for the internal RNG. None means non-deterministic.
+        "two_point" o "one_point".
+    random_seed : int o None
+        Semilla para el generador de números aleatorios. None significa no determinístico.
     """
 
     def __init__(
@@ -144,27 +144,27 @@ class GeneticAlgorithm:
         self._rng = np.random.default_rng(random_seed)
 
     # ------------------------------------------------------------------
-    # Fitness
+    # Aptitud
     # ------------------------------------------------------------------
 
     def _greedy_assign_parts(
         self, machine_assignment: np.ndarray, instance: MCDPInstance
     ) -> np.ndarray:
-        """Assign each part to the cell containing most of its required machines.
+        """Asigna cada parte a la celda que contiene la mayoría de sus máquinas requeridas.
 
-        Matrix convention: rows = machines, columns = parts.
-        For each part p (column p), we look at which machines have a 1 in
-        that column and count how many of those machines are in each cell.
+        Convención de matriz: filas = máquinas, columnas = partes.
+        Para cada parte p (columna p), se identifican las máquinas con valor 1 en
+        esa columna y se cuenta cuántas de esas máquinas están en cada celda.
 
-        Tiebreak: cell with fewest parts already assigned (load balance).
-        Parts that require no machines are assigned to the least loaded cell.
+        Desempate: celda con menos partes ya asignadas (balanceo de carga).
+        Las partes que no requieren máquinas se asignan a la celda con menor carga.
         """
         C = instance.C
         part_assignment = np.empty(instance.n_parts, dtype=int)
         part_counts = np.zeros(C, dtype=int)
 
         for p in range(instance.n_parts):
-            required = instance.matrix[:, p]  # machines needed by part p
+            required = instance.matrix[:, p]  # máquinas requeridas por la parte p
             if required.sum() == 0:
                 best = int(np.argmin(part_counts))
             else:
@@ -182,7 +182,7 @@ class GeneticAlgorithm:
     def _compute_fitness(
         self, individual: Individual, instance: MCDPInstance
     ) -> float:
-        """Compute GE and cache part_assignment on the individual."""
+        """Calcula la GE y cachea part_assignment en el individuo."""
         if individual.fitness is not None:
             return individual.fitness
 
@@ -193,8 +193,8 @@ class GeneticAlgorithm:
         e_in = 0
         e_voids = 0
         for c in range(instance.C):
-            machine_idx = np.where(ma == c)[0]  # row indices (machines)
-            part_idx = np.where(pa == c)[0]      # col indices (parts)
+            machine_idx = np.where(ma == c)[0]  # índices de fila (máquinas)
+            part_idx = np.where(pa == c)[0]      # índices de columna (partes)
             if len(machine_idx) > 0 and len(part_idx) > 0:
                 block = instance.matrix[np.ix_(machine_idx, part_idx)]
                 e_in += int(block.sum())
@@ -211,16 +211,16 @@ class GeneticAlgorithm:
             self._compute_fitness(ind, instance)
 
     # ------------------------------------------------------------------
-    # Repair: enforce MaxM per cell
+    # Reparación: aplicar restricción MaxM por celda
     # ------------------------------------------------------------------
 
     def _repair(
         self, assignment: np.ndarray, instance: MCDPInstance
     ) -> np.ndarray:
-        """Redistribute machines from overcrowded cells to cells with capacity.
+        """Redistribuye máquinas de celdas sobrecargadas a celdas con capacidad disponible.
 
-        All instances satisfy C * max_m >= n_machines, so this always converges.
-        The inner break is a safety guard for unexpected edge cases.
+        Todas las instancias satisfacen C * max_m >= n_machines, por lo que siempre converge.
+        El break interno es una salvaguarda para casos extremos inesperados.
         """
         assignment = assignment.copy()
         C, max_m = instance.C, instance.max_m
@@ -235,7 +235,7 @@ class GeneticAlgorithm:
                     machine_to_move = int(self._rng.choice(machines_in_c))
                     available = [k for k in range(C) if k != c and counts[k] < max_m]
                     if not available:
-                        break  # constraint cannot be satisfied further; stop
+                        break  # la restricción no puede satisfacerse más; detener
                     target = int(self._rng.choice(available))
                     assignment[machine_to_move] = target
                     counts[c] -= 1
@@ -245,7 +245,7 @@ class GeneticAlgorithm:
         return assignment
 
     # ------------------------------------------------------------------
-    # Initialization
+    # Inicialización
     # ------------------------------------------------------------------
 
     def _initialize_individual(self, instance: MCDPInstance) -> Individual:
@@ -257,7 +257,7 @@ class GeneticAlgorithm:
         return [self._initialize_individual(instance) for _ in range(self.pop_size)]
 
     # ------------------------------------------------------------------
-    # Selection
+    # Selección
     # ------------------------------------------------------------------
 
     def _tournament_select(self, population: list) -> Individual:
@@ -267,7 +267,7 @@ class GeneticAlgorithm:
         return population[best_idx]
 
     # ------------------------------------------------------------------
-    # Crossover
+    # Cruce
     # ------------------------------------------------------------------
 
     def _crossover(
@@ -276,7 +276,7 @@ class GeneticAlgorithm:
         p2: Individual,
         instance: MCDPInstance,
     ):
-        """Two-point (or one-point) crossover followed by repair."""
+        """Cruce en dos puntos (o un punto) seguido de reparación."""
         if self._rng.random() > self.crossover_prob:
             return p1.copy(), p2.copy()
 
@@ -290,7 +290,7 @@ class GeneticAlgorithm:
             p, q = pts[0], pts[1]
             c1 = np.concatenate([a1[:p], a2[p:q], a1[q:]])
             c2 = np.concatenate([a2[:p], a1[p:q], a2[q:]])
-        else:  # one_point
+        else:  # un_punto
             p = int(self._rng.integers(1, M))
             c1 = np.concatenate([a1[:p], a2[p:]])
             c2 = np.concatenate([a2[:p], a1[p:]])
@@ -300,14 +300,15 @@ class GeneticAlgorithm:
         return Individual(c1), Individual(c2)
 
     # ------------------------------------------------------------------
-    # Mutation
+    # Mutación
     # ------------------------------------------------------------------
 
     def _mutate(self, individual: Individual, instance: MCDPInstance) -> Individual:
-        """Swap cell assignments of two machines from different cells.
+        """Intercambia las asignaciones de celda de dos máquinas de celdas distintas.
 
-        A same-cell swap is a no-op, so we try a few times to find a valid
-        pair. Swapping two machines is always feasible (counts unchanged).
+        Un intercambio dentro de la misma celda no produce cambios, por lo que se
+        intenta varias veces encontrar un par válido. Intercambiar dos máquinas
+        siempre es factible (los conteos no cambian).
         """
         if self._rng.random() > self.mutation_prob:
             return individual.copy()
@@ -322,11 +323,11 @@ class GeneticAlgorithm:
         return individual.copy()
 
     # ------------------------------------------------------------------
-    # Main GA loop
+    # Ciclo principal del AG
     # ------------------------------------------------------------------
 
     def run(self, instance: MCDPInstance) -> dict:
-        """Execute the GA on the given instance.
+        """Ejecuta el AG en la instancia dada.
 
         Returns
         -------
@@ -349,11 +350,11 @@ class GeneticAlgorithm:
             if time.time() - t_start >= self.max_time_seconds:
                 break
 
-            # Elitism: preserve best individuals unchanged
+            # Elitismo: preservar los mejores individuos sin cambios
             population.sort(key=lambda x: x.fitness, reverse=True)
             elites = [ind.copy() for ind in population[: self.elite_count]]
 
-            # Build next generation
+            # Construir la siguiente generación
             new_pop: list = list(elites)
             while len(new_pop) < self.pop_size:
                 p1 = self._tournament_select(population)
@@ -365,7 +366,7 @@ class GeneticAlgorithm:
                 if len(new_pop) < self.pop_size:
                     new_pop.append(c2)
 
-            # Evaluate only newly created individuals
+            # Evaluar solo los individuos recién creados
             for ind in new_pop[self.elite_count :]:
                 self._compute_fitness(ind, instance)
 
@@ -389,19 +390,19 @@ class GeneticAlgorithm:
 
 
 # ---------------------------------------------------------------------------
-# Experiment runner
+# Ejecutor de experimentos
 # ---------------------------------------------------------------------------
 
 class ExperimentRunner:
-    """Runs multiple independent GA executions and aggregates statistics.
+    """Ejecuta múltiples corridas independientes del AG y agrega estadísticas.
 
-    Parameters
+    Parámetros
     ----------
     ga_config : dict
-        Keyword arguments for GeneticAlgorithm. If 'random_seed' is set,
-        each run derives its seed as base_seed + run_index for reproducibility.
+        Argumentos para GeneticAlgorithm. Si se define 'random_seed',
+        cada corrida deriva su semilla como base_seed + run_index para reproducibilidad.
     n_runs : int
-        Number of independent runs per instance.
+        Número de corridas independientes por instancia.
     """
 
     def __init__(self, ga_config: dict, n_runs: int = 10):
@@ -409,7 +410,7 @@ class ExperimentRunner:
         self.n_runs = n_runs
 
     def run_experiment(self, instance: MCDPInstance, instance_name: str = "") -> dict:
-        """Run n_runs GA executions on one instance."""
+        """Ejecuta n_runs corridas del AG en una instancia."""
         fitness_values = []
         convergence_curves = []
         best_result: Optional[dict] = None
@@ -446,9 +447,9 @@ class ExperimentRunner:
         }
 
     def run_all(self, instances: dict) -> dict:
-        """Run experiments for all instances.
+        """Ejecuta experimentos para todas las instancias.
 
-        Parameters
+        Parámetros
         ----------
         instances : dict[str, MCDPInstance]
         """
@@ -469,7 +470,7 @@ class ExperimentRunner:
 
 
 # ---------------------------------------------------------------------------
-# Quick smoke-test when run directly
+# Prueba rápida al ejecutar directamente
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
