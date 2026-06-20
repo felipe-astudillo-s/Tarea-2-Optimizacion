@@ -5,7 +5,7 @@
 INTEGRANTES
 -----------
   - Felipe Astudillo    RUT: 21.734.001-2
-  - Diego Zuñiga        RUT: XX.XXX.XXX-X
+  - Diego Zuñiga        RUT: 21763321-4
 
 DESCRIPCIÓN
 -----------
