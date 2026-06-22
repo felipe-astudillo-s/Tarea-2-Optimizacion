@@ -78,17 +78,20 @@ class Individual:
         self.machine_assignment: np.ndarray = machine_assignment.copy()
         self.part_assignment: Optional[np.ndarray] = None
         self.fitness: Optional[float] = None
+        self.costo: Optional[float] = None
 
     def copy(self) -> "Individual":
         ind = Individual(self.machine_assignment)
         if self.part_assignment is not None:
             ind.part_assignment = self.part_assignment.copy()
         ind.fitness = self.fitness
+        ind.costo = self.costo
         return ind
 
     def invalidate_fitness(self):
         self.part_assignment = None
         self.fitness = None
+        self.costo = None
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +134,7 @@ class GeneticAlgorithm:
         elite_count: int = 2,
         crossover_type: str = "two_point",
         random_seed: Optional[int] = None,
+        objective: str = "ge",
     ):
         self.pop_size = pop_size
         self.max_generations = max_generations
@@ -141,6 +145,7 @@ class GeneticAlgorithm:
         self.elite_count = elite_count
         self.crossover_type = crossover_type
         self.random_seed = random_seed
+        self.objective = objective
         self._rng = np.random.default_rng(random_seed)
 
     # ------------------------------------------------------------------
@@ -182,7 +187,7 @@ class GeneticAlgorithm:
     def _compute_fitness(
         self, individual: Individual, instance: MCDPInstance
     ) -> float:
-        """Calcula la GE y cachea part_assignment en el individuo."""
+        """Calcula el fitness (GE o Costo invertido) y cachea part_assignment en el individuo."""
         if individual.fitness is not None:
             return individual.fitness
 
@@ -190,18 +195,32 @@ class GeneticAlgorithm:
         pa = self._greedy_assign_parts(ma, instance)
         individual.part_assignment = pa
 
-        e_in = 0
-        e_voids = 0
-        for c in range(instance.C):
-            machine_idx = np.where(ma == c)[0]  # índices de fila (máquinas)
-            part_idx = np.where(pa == c)[0]      # índices de columna (partes)
-            if len(machine_idx) > 0 and len(part_idx) > 0:
-                block = instance.matrix[np.ix_(machine_idx, part_idx)]
-                e_in += int(block.sum())
-                e_voids += int((block == 0).sum())
+        if self.objective == "cost":
+            costo = 0
+            for j in range(instance.n_parts):
+                maquinas_requeridas = np.where(instance.matrix[:, j] == 1)[0]
+                if len(maquinas_requeridas) > 0:
+                    celdas_usadas = set(ma[maquinas_requeridas])
+                    if len(celdas_usadas) > 1:
+                        costo += len(celdas_usadas) - 1
+            # Como el GA maximiza, devolvemos el inverso del costo.
+            # Sumamos 1 para evitar division por cero.
+            individual.fitness = 1.0 / (1.0 + costo)
+            individual.costo = costo
+        else:
+            e_in = 0
+            e_voids = 0
+            for c in range(instance.C):
+                machine_idx = np.where(ma == c)[0]  # índices de fila (máquinas)
+                part_idx = np.where(pa == c)[0]      # índices de columna (partes)
+                if len(machine_idx) > 0 and len(part_idx) > 0:
+                    block = instance.matrix[np.ix_(machine_idx, part_idx)]
+                    e_in += int(block.sum())
+                    e_voids += int((block == 0).sum())
 
-        denom = instance.total_ones + e_voids
-        individual.fitness = e_in / denom if denom > 0 else 0.0
+            denom = instance.total_ones + e_voids
+            individual.fitness = e_in / denom if denom > 0 else 0.0
+
         return individual.fitness
 
     def _evaluate_population(
@@ -381,6 +400,7 @@ class GeneticAlgorithm:
 
         return {
             "best_fitness": best.fitness,
+            "best_costo": best.costo if hasattr(best, 'costo') else None,
             "best_machine_assignment": best.machine_assignment,
             "best_part_assignment": best.part_assignment,
             "generations_run": gen,
@@ -429,9 +449,13 @@ class ExperimentRunner:
             if best_result is None or result["best_fitness"] > best_result["best_fitness"]:
                 best_result = result
 
+            metric_str = f"GE = {result['best_fitness']:.4f}"
+            if config.get("objective", "ge") == "cost":
+                metric_str = f"Costo = {result['best_costo']} (Fit: {result['best_fitness']:.4f})"
+
             print(
                 f"  [{instance_name}] Run {run_idx + 1:2d}/{self.n_runs}: "
-                f"GE = {result['best_fitness']:.4f}  "
+                f"{metric_str}  "
                 f"({result['generations_run']} gen, {result['time_elapsed']:.1f}s)"
             )
 
@@ -440,6 +464,7 @@ class ExperimentRunner:
             "instance": instance_name,
             "fitness_values": fitness_values,
             "best_fitness": float(arr.max()),
+            "best_costo": best_result["best_costo"] if best_result and "best_costo" in best_result else None,
             "mean": float(arr.mean()),
             "std": float(arr.std()),
             "best_solution": best_result,
@@ -461,11 +486,14 @@ class ExperimentRunner:
                   f"C={inst.C}, MaxM={inst.max_m}")
             print(f"{'='*60}")
             results[name] = self.run_experiment(inst, name)
+            metric_label = "Media GE" if self.ga_config.get("objective", "ge") == "ge" else "Media Fitness"
             print(
-                f"\n  -> Media GE: {results[name]['mean']:.4f} "
+                f"\n  -> {metric_label}: {results[name]['mean']:.4f} "
                 f"± {results[name]['std']:.4f}  "
                 f"(mejor: {results[name]['best_fitness']:.4f})"
             )
+            if self.ga_config.get("objective", "ge") == "cost" and results[name].get('best_costo') is not None:
+                print(f"  -> MEJOR COSTO DE TRANSPORTE: {results[name]['best_costo']}")
         return results
 
 
